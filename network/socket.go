@@ -5,6 +5,7 @@ import (
 	"chat-server/types"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"log"
 	"net/http"
 	"time"
 )
@@ -18,7 +19,7 @@ var upgrader = &websocket.Upgrader{
 
 // Room chat room
 type Room struct {
-	Forward chan *message    // 受診されるメッセージを保存、入ってくるメッセージを他のクライアントに転送
+	Forward chan *message    // 受信されるメッセージを保存、入ってくるメッセージを他のクライアントに転送
 	Join    chan *client     // Socket が繋がる場合動く
 	Leave   chan *client     // Socket がきれる場合動く
 	Clients map[*client]bool // 現在の Room にある client の情報を保存
@@ -53,8 +54,14 @@ func (c *client) Read() {
 		var msg *message
 		err := c.Socket.ReadJSON(&msg)
 		if err != nil {
-			panic(err)
+			if !websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway) {
+				break
+			} else {
+				panic(err)
+			}
 		} else {
+			log.Println("READ : ", msg, "client", c.Name)
+			log.Println()
 			msg.TIme = time.Now().Unix()
 			msg.Name = c.Name
 
@@ -67,6 +74,8 @@ func (c client) Write() {
 	// client　がメッセージを転送するメソッド
 	defer c.Socket.Close()
 	for msg := range c.Send {
+		log.Println("WRITE : ", msg, "client", c.Name)
+		log.Println()
 		err := c.Socket.WriteJSON(msg)
 		if err != nil {
 			panic(err)
