@@ -2,7 +2,6 @@ package network
 
 import "C"
 import (
-	"chat-server/types"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"log"
@@ -10,28 +9,33 @@ import (
 	"time"
 )
 
+const (
+	SocketBufferSize  = 1024
+	messageBufferSize = 256
+)
+
 // Upgrader HTTP -> Websocket　にアップグレードするときに使用する
 var upgrader = &websocket.Upgrader{
-	ReadBufferSize:  types.SocketBufferSize,
-	WriteBufferSize: types.MessageBufferSize,
+	ReadBufferSize:  SocketBufferSize,
+	WriteBufferSize: messageBufferSize,
 	CheckOrigin:     func(r *http.Request) bool { return true },
 }
 
 // Room chat room
 type Room struct {
 	Forward chan *message    // 受信されるメッセージを保存、入ってくるメッセージを他のクライアントに転送
-	Join    chan *client     // Socket が繋がる場合動く
-	Leave   chan *client     // Socket がきれる場合動く
-	Clients map[*client]bool // 現在の Room にある client の情報を保存
+	Join    chan *Client     // Socket が繋がる場合動く
+	Leave   chan *Client     // Socket がきれる場合動く
+	Clients map[*Client]bool // 現在の Room にある Client の情報を保存
 }
 
 type message struct {
 	Name    string
 	Message string
-	TIme    int64
+	When    time.Time
 }
 
-type client struct {
+type Client struct {
 	Send   chan *message
 	Room   *Room
 	Name   string
@@ -41,14 +45,14 @@ type client struct {
 func NewRoom() *Room {
 	return &Room{
 		Forward: make(chan *message),
-		Join:    make(chan *client),
-		Leave:   make(chan *client),
-		Clients: make(map[*client]bool),
+		Join:    make(chan *Client),
+		Leave:   make(chan *Client),
+		Clients: make(map[*Client]bool),
 	}
 }
 
-func (c *client) Read() {
-	// client　が入ってくるメッセージを読みとるメソッド
+func (c *Client) Read() {
+	// Client　が入ってくるメッセージを読みとるメソッド
 	defer c.Socket.Close()
 	for {
 		var msg *message
@@ -59,22 +63,20 @@ func (c *client) Read() {
 			} else {
 				panic(err)
 			}
-		} else {
-			log.Println("READ : ", msg, "client", c.Name)
-			log.Println()
-			msg.TIme = time.Now().Unix()
-			msg.Name = c.Name
-
-			c.Room.Forward <- msg
 		}
+		msg.When = time.Now()
+		msg.Name = c.Name
+
+		// 受け取ったメッセージを roomタイプに連続的に転送する
+		c.Room.Forward <- msg
 	}
 }
 
-func (c client) Write() {
-	// client　がメッセージを転送するメソッド
+func (c *Client) Write() {
+	// Client　がメッセージを転送するメソッド
 	defer c.Socket.Close()
 	for msg := range c.Send {
-		log.Println("WRITE : ", msg, "client", c.Name)
+		log.Println("WRITE : ", msg, "Client", c.Name)
 		log.Println()
 		err := c.Socket.WriteJSON(msg)
 		if err != nil {
@@ -83,47 +85,55 @@ func (c client) Write() {
 	}
 }
 
-func (r *Room) RunInit() {
+func (r *Room) Run() {
 	// Room にある全てのchanの値を受けとる役割
 	for {
 		select {
 		case client := <-r.Join:
 			r.Clients[client] = true
 		case client := <-r.Leave:
-			r.Clients[client] = false
-			close(client.Send)
+			//r.Clients[client] = false
 			delete(r.Clients, client)
+			close(client.Send)
 		case msg := <-r.Forward:
 			for client := range r.Clients {
+				// 全ての client にメッセージを送る
 				client.Send <- msg
 			}
 		}
 	}
 }
 
-func (r *Room) SocketServe(c *gin.Context) {
-	socket, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+func (r *Room) ServeHTTP(c *gin.Context) {
+	upgrader.CheckOrigin = func(r *http.Request) bool { return true }
+
+	Socket, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		// TODO: panic 使用はよくないので修正
-		panic(err)
+		log.Fatal("---- serveHTTP:", err)
+		return
 	}
 
-	userCookie, err := c.Request.Cookie("auth")
+	authCookie, err := c.Request.Cookie("auth")
 	if err != nil {
-		// TODO: panic 使用はよくないので修正
-		panic(err)
+		log.Fatal("auth cookie is failed", err)
+		return
 	}
 
-	client := &client{
-		Send:   make(chan *message, types.MessageBufferSize),
+	// 問題がなければ　Client　を生成して Room に入場したお知らせを chan に送る
+	client := &Client{
+		Send:   make(chan *message, messageBufferSize),
 		Room:   r,
-		Name:   userCookie.Value,
-		Socket: socket,
+		Name:   authCookie.Value,
+		Socket: Socket,
 	}
 
 	r.Join <- client
+	// defer を利用して Client が終了する時退場させる
 	defer func() { r.Leave <- client }()
-
+	// go routine を利用して Writeを実行
 	go client.Write()
+
+	// そのあと main routine で Read を実行することで該当するリクエストが閉じられるのを防ぐ
+	// -> channel を利用して連結を活性化させることである
 	client.Read()
 }

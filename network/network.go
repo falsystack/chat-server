@@ -1,38 +1,45 @@
 package network
 
 import (
+	"chat-server/repository"
+	"chat-server/service"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"log"
 )
 
-type Network struct {
+type Server struct {
 	engine *gin.Engine
+
+	service    *service.Service
+	repository *repository.Repository
+	port       string
+	ip         string
 }
 
 // NewServer Constructor
-func NewServer() *Network {
-	n := &Network{
-		engine: gin.New(),
+func NewServer(service *service.Service, rep *repository.Repository, port string) *Server {
+	s := &Server{
+		engine:     gin.New(),
+		service:    service,
+		repository: rep,
+		port:       port,
 	}
-	n.engine.Use(gin.Logger())
-	n.engine.Use(gin.Recovery()) // panic 등으로 인해 서버가 종료되었을 때 재시작시켜준다.
-	n.engine.Use(cors.New(cors.Config{
+	s.engine.Use(gin.Logger())
+	s.engine.Use(gin.Recovery()) // panic 등으로 인해 서버가 종료되었을 때 재시작시켜준다.
+	s.engine.Use(cors.New(cors.Config{
 		AllowAllOrigins: true,
 		AllowMethods:    []string{"*"},
 		AllowHeaders:    []string{"*"},
 		AllowWebSockets: true,
 	}))
 
-	r := NewRoom()
-	go r.RunInit()
+	registerServer(s.engine)
 
-	n.engine.GET("/room", r.SocketServe)
-
-	return n
+	return s
 }
 
-func (n *Network) StartServer() error {
+func (s *Server) StartServer() error {
 	log.Println("Starting server...")
-	return n.engine.Run(":8080")
+	return s.engine.Run(s.port)
 }
