@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"time"
 )
 
 // Upgrader HTTP -> Websocket　にアップグレードするときに使用する
@@ -18,9 +19,9 @@ var upgrader = &websocket.Upgrader{
 // Room chat room
 type Room struct {
 	Forward chan *message    // 受診されるメッセージを保存、入ってくるメッセージを他のクライアントに転送
-	Join    chan *Client     // Socket が繋がる場合動く
-	Leave   chan *Client     // Socket がきれる場合動く
-	Clients map[*Client]bool // 現在の Room にある Client の情報を保存
+	Join    chan *client     // Socket が繋がる場合動く
+	Leave   chan *client     // Socket がきれる場合動く
+	Clients map[*client]bool // 現在の Room にある client の情報を保存
 }
 
 type message struct {
@@ -29,7 +30,7 @@ type message struct {
 	TIme    int64
 }
 
-type Client struct {
+type client struct {
 	Send   chan *message
 	Room   *Room
 	Name   string
@@ -39,9 +40,37 @@ type Client struct {
 func NewRoom() *Room {
 	return &Room{
 		Forward: make(chan *message),
-		Join:    make(chan *Client),
-		Leave:   make(chan *Client),
-		Clients: make(map[*Client]bool),
+		Join:    make(chan *client),
+		Leave:   make(chan *client),
+		Clients: make(map[*client]bool),
+	}
+}
+
+func (c *client) Read() {
+	// client　が入ってくるメッセージを読みとるメソッド
+	defer c.Socket.Close()
+	for {
+		var msg *message
+		err := c.Socket.ReadJSON(&msg)
+		if err != nil {
+			panic(err)
+		} else {
+			msg.TIme = time.Now().Unix()
+			msg.Name = c.Name
+
+			c.Room.Forward <- msg
+		}
+	}
+}
+
+func (c client) Write() {
+	// client　がメッセージを転送するメソッド
+	defer c.Socket.Close()
+	for msg := range c.Send {
+		err := c.Socket.WriteJSON(msg)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 
@@ -76,7 +105,7 @@ func (r *Room) SocketServe(c *gin.Context) {
 		panic(err)
 	}
 
-	client := &Client{
+	client := &client{
 		Send:   make(chan *message, types.MessageBufferSize),
 		Room:   r,
 		Name:   userCookie.Value,
@@ -86,5 +115,6 @@ func (r *Room) SocketServe(c *gin.Context) {
 	r.Join <- client
 	defer func() { r.Leave <- client }()
 
-	//
+	go client.Write()
+	client.Read()
 }
