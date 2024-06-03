@@ -34,7 +34,7 @@ func NewServer(service *service.Service, rep *repository.Repository, port string
 		AllowWebSockets: true,
 	}))
 
-	registerServer(s.engine)
+	registerServer(s)
 
 	return s
 }
