@@ -37,7 +37,7 @@ func (r Repository) GetChatList(roomName string) ([]*schema.Chat, error) {
 	} else {
 		defer cursor.Close()
 
-		var result []*schema.Room
+		var result []*schema.Chat
 
 		for cursor.Next() {
 			d := new(schema.Chat)
@@ -50,7 +50,7 @@ func (r Repository) GetChatList(roomName string) ([]*schema.Chat, error) {
 		}
 
 		if len(result) == 0 {
-			return []*schema.Room{}, nil
+			return []*schema.Chat{}, nil
 		} else {
 			return result, nil
 		}
@@ -67,7 +67,7 @@ func (r *Repository) RoomList() ([]*schema.Room, error) {
 		var result []*schema.Room
 
 		for cursor.Next() {
-			d := new(schema.Chat)
+			d := new(schema.Room)
 
 			if err := cursor.Scan(&d); err != nil {
 				return nil, err

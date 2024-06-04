@@ -17,16 +17,20 @@ func NewService(rep *repository.Repository) *Service {
 }
 
 func (s *Service) EnterRoom(roomName string) ([]*schema.Chat, error) {
-	if _, err := s.rep.GetChatList(roomName); err != nil {
+	if res, err := s.rep.GetChatList(roomName); err != nil {
 		log.Println("Failed To Get Chat List", "err", err.Error())
 		return nil, err
+	} else {
+		return res, nil
 	}
 }
 
 func (s *Service) RoomList() ([]*schema.Room, error) {
-	if _, err := s.RoomList(); err != nil {
+	if res, err := s.RoomList(); err != nil {
 		log.Println("Failed To Get All Room  List", "err", err.Error())
 		return nil, err
+	} else {
+		return res, nil
 	}
 }
 
