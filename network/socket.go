@@ -2,6 +2,7 @@ package network
 
 import "C"
 import (
+	"chat-server/service"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"log"
@@ -27,27 +28,30 @@ type Room struct {
 	Join    chan *Client     // Socket が繋がる場合動く
 	Leave   chan *Client     // Socket がきれる場合動く
 	Clients map[*Client]bool // 現在の Room にある Client の情報を保存
+	service *service.Service
 }
 
 type message struct {
-	Name    string
-	Message string
-	When    time.Time
+	Name    string    `json:"name"`
+	Message string    `json:"message"`
+	Room    string    `json:"room"`
+	When    time.Time `json:"when"`
 }
 
 type Client struct {
 	Send   chan *message
 	Room   *Room
-	Name   string
+	Name   string `json:"name"`
 	Socket *websocket.Conn
 }
 
-func NewRoom() *Room {
+func NewRoom(service *service.Service) *Room {
 	return &Room{
 		Forward: make(chan *message),
 		Join:    make(chan *Client),
 		Leave:   make(chan *Client),
 		Clients: make(map[*Client]bool),
+		service: service,
 	}
 }
 
@@ -96,6 +100,9 @@ func (r *Room) Run() {
 			delete(r.Clients, client)
 			close(client.Send)
 		case msg := <-r.Forward:
+
+			go r.service.InsertChatting(msg.Name, msg.Message, msg.Room)
+
 			for client := range r.Clients {
 				// 全ての client にメッセージを送る
 				client.Send <- msg

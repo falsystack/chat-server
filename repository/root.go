@@ -5,6 +5,7 @@ import (
 	"chat-server/types/schema"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
+	"log"
 	"strings"
 )
 
@@ -30,7 +31,14 @@ func NewRepository(cfg *config.Config) (*Repository, error) {
 	}
 }
 
-func (r Repository) GetChatList(roomName string) ([]*schema.Chat, error) {
+func (r *Repository) InsertChatting(user, message, roomName string) error {
+	log.Println("Insert Chatting Using WSS", "from", user, "message", message, "room", roomName)
+	_, err := r.db.Exec("INSERT INTO chatting.chat(romm, name, message) VALUES(?, ?, ?)", roomName, user, message)
+
+	return err
+}
+
+func (r *Repository) GetChatList(roomName string) ([]*schema.Chat, error) {
 	qs := query([]string{"SELECT * FROM", chat, "WHERE room = ? ORDER BY `when` DESC LIMIT 10"})
 	if cursor, err := r.db.Query(qs, roomName); err != nil {
 		return nil, err
