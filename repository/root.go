@@ -2,6 +2,7 @@ package repository
 
 import (
 	"chat-server/config"
+	"chat-server/repository/kafka"
 	"chat-server/types/schema"
 	"database/sql"
 	_ "github.com/go-sql-driver/mysql"
@@ -10,8 +11,9 @@ import (
 )
 
 type Repository struct {
-	cfg *config.Config
-	db  *sql.DB
+	cfg   *config.Config
+	db    *sql.DB
+	kafka *kafka.Kafka
 }
 
 const (
@@ -25,6 +27,8 @@ func NewRepository(cfg *config.Config) (*Repository, error) {
 	var err error
 
 	if _, err = sql.Open(cfg.DB.Database, cfg.DB.URL); err != nil {
+		return nil, err
+	} else if r.kafka, err = kafka.NewKafka(cfg); err != nil {
 		return nil, err
 	} else {
 		return r, nil

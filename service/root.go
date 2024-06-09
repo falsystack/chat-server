@@ -22,6 +22,7 @@ func (s *Service) InsertChatting(user, message, roomName string) error {
 		log.Println("failed to Chat", "err", err)
 		return err
 	}
+	return nil
 }
 
 func (s *Service) EnterRoom(roomName string) ([]*schema.Chat, error) {
