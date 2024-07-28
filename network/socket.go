@@ -5,6 +5,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 	"net/http"
+	"time"
 )
 
 // http -> websocket 으로 업그레이드
@@ -43,6 +44,33 @@ func NewRoom() *Room {
 		Leave:   make(chan *client),
 		Clients: make(map[*client]bool),
 	}
+}
+
+func (c client) Read() {
+	// 클라이언트가 들어오는 메시지를 읽는 함수
+	defer c.Socket.Close()
+	for {
+		var msg *message
+		if err := c.Socket.ReadJSON(&msg); err != nil {
+			panic(err)
+		} else {
+			msg.Time = time.Now().Unix()
+			msg.Name = c.Name
+
+			c.Room.Forward <- msg
+		}
+	}
+}
+
+func (c client) Write() {
+	// 클라이언트가 메시지를 전송하는 함수
+	defer c.Socket.Close()
+	for msg := range c.Send {
+		if err := c.Socket.WriteJSON(msg); err != nil {
+			panic(err)
+		}
+	}
+
 }
 
 func (r Room) RunInit() {
@@ -86,4 +114,7 @@ func (r *Room) SocketServe(c *gin.Context) {
 	defer func() {
 		r.Leave <- client
 	}()
+
+	go client.Write()
+	client.Read()
 }
