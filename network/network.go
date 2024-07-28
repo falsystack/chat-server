@@ -22,6 +22,11 @@ func NewServer() *Network {
 		AllowHeaders:    []string{"*"},
 	}))
 
+	r := NewRoom()
+	go r.RunInit()
+
+	n.engin.GET("/room", r.SocketServe)
+
 	return n
 }
 
