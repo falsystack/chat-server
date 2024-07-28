@@ -1,7 +1,0 @@
-[db]
-database = "mysql"
-url = "root:root@tcp(localhost:3306)/chatting?multiStatements=true&parseTime=true"
-
-[kafka]
-URL="localhost:9292"
-ClientID="chat-producer-1"
