@@ -45,6 +45,24 @@ func NewRoom() *Room {
 	}
 }
 
+func (r Room) RunInit() {
+	// Room 에 있는 모든 채널값들을 받는 역할을 한다
+	for {
+		select {
+		case client := <-r.Join:
+			r.Clients[client] = true
+		case client := <-r.Leave:
+			r.Clients[client] = false
+			close(client.Send)
+			delete(r.Clients, client)
+		case msg := <-r.Forward:
+			for client := range r.Clients {
+				client.Send <- msg
+			}
+		}
+	}
+}
+
 func (r *Room) SocketServe(c *gin.Context) {
 	socket, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
