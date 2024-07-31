@@ -1,7 +1,7 @@
 package network
 
 import (
-	"chat-server/types"
+	"chat_socket_server/types"
 	"github.com/gin-gonic/gin"
 	"net/http"
 )
@@ -11,9 +11,7 @@ type api struct {
 }
 
 func registerServer(server *Server) {
-	a := &api{
-		server: server,
-	}
+	a := &api{server: server}
 
 	server.engine.GET("/room-list", a.roomList)
 	server.engine.GET("/room", a.room)
@@ -21,12 +19,10 @@ func registerServer(server *Server) {
 
 	server.engine.POST("/make-room", a.makeRoom)
 
-	//r := NewRoom()
-	//go r.Run()
-	//
-	//engine.GET("/room", r.ServeHTTP)
-	//
-	//return a
+	r := NewRoom(server.service)
+	go r.Run()
+
+	server.engine.GET("/room-chat", r.ServeHTTP)
 }
 
 func (a *api) roomList(c *gin.Context) {
@@ -42,7 +38,7 @@ func (a *api) makeRoom(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response(c, http.StatusUnprocessableEntity, err.Error())
-	} else if err := a.server.service.MakeRoom(req.Name); err != nil {
+	} else if err = a.server.service.MakeRoom(req.Name); err != nil {
 		response(c, http.StatusInternalServerError, err.Error())
 	} else {
 		response(c, http.StatusOK, "Success")
@@ -50,9 +46,9 @@ func (a *api) makeRoom(c *gin.Context) {
 }
 
 func (a *api) room(c *gin.Context) {
-	var req types.BodyRoomReq
+	var req types.FormRoomReq
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindQuery(&req); err != nil {
 		response(c, http.StatusUnprocessableEntity, err.Error())
 	} else if res, err := a.server.service.Room(req.Name); err != nil {
 		response(c, http.StatusInternalServerError, err.Error())
@@ -62,9 +58,9 @@ func (a *api) room(c *gin.Context) {
 }
 
 func (a *api) enterRoom(c *gin.Context) {
-	var req types.BodyRoomReq
+	var req types.FormRoomReq
 
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBindQuery(&req); err != nil {
 		response(c, http.StatusUnprocessableEntity, err.Error())
 	} else if res, err := a.server.service.EnterRoom(req.Name); err != nil {
 		response(c, http.StatusInternalServerError, err.Error())

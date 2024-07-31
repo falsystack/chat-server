@@ -1,7 +1,7 @@
 package network
 
 import (
-	"chat-server/types"
+	"chat_socket_server/types"
 	"github.com/gin-gonic/gin"
 )
 
